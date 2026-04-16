@@ -29,8 +29,8 @@ def create_icon(size):
     img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    PURPLE = (124, 58, 237, 255)    # #7c3aed
-    PEAK   = (124, 58, 237, 180)   # translucent purple for peaks
+    PURPLE = (196, 181, 253, 255)   # #c4b5fd — light purple, visible on dark and light backgrounds
+    PEAK   = (196, 181, 253, 180)  # translucent purple for peaks
     WHITE  = PURPLE                 # reuse purple everywhere white was used
     lw     = max(2, int(S * 0.055))
 
@@ -69,7 +69,7 @@ def create_icon(size):
     sx = ir - sr - int(S * 0.04)
     sy = it + sr + int(S * 0.02)
     draw.ellipse([sx - sr, sy - sr, sx + sr, sy + sr],
-                 fill=(124, 58, 237, 220))
+                 fill=(196, 181, 253, 220))
 
     # --- Download arrow (lower ~45% of canvas) ---
     ax   = S // 2
