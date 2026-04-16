@@ -1,4 +1,4 @@
-const { getOrCreateDir, fetchAndWrite } = require('../lib/fs-utils');
+const { getOrCreateDir, fetchAndWrite, fetchAndDownload } = require('../lib/fs-utils');
 
 // ---------------------------------------------------------------------------
 // Helpers: mock FileSystemDirectoryHandle and FileSystemFileHandle
@@ -150,5 +150,86 @@ describe('fetchAndWrite', () => {
     await fetchAndWrite(url, 'diagram.png', dir);
     expect(fetch).toHaveBeenCalledWith(url, { credentials: 'include' });
     expect(dir.getFileHandle).toHaveBeenCalledWith('diagram.png', { create: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchAndDownload
+// ---------------------------------------------------------------------------
+
+describe('fetchAndDownload', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function mockSuccessfulFetch() {
+    const blob = new Blob(['data'], { type: 'image/png' });
+    global.fetch.mockResolvedValueOnce({ ok: true, status: 200, blob: async () => blob });
+    return blob;
+  }
+
+  function mockSuccessfulDownload() {
+    chrome.downloads.download.mockImplementation((opts, cb) => cb(42));
+    chrome.downloads.search.mockImplementation((query, cb) => cb([{ state: 'complete' }]));
+  }
+
+  test('fetches URL with credentials: include', async () => {
+    mockSuccessfulFetch();
+    mockSuccessfulDownload();
+    await fetchAndDownload('https://example.com/photo.png', 'PageTitle/photo.png');
+    expect(fetch).toHaveBeenCalledWith('https://example.com/photo.png', { credentials: 'include' });
+  });
+
+  test('creates an object URL from the blob and passes it to chrome.downloads', async () => {
+    mockSuccessfulFetch();
+    mockSuccessfulDownload();
+    await fetchAndDownload('https://example.com/photo.png', 'PageTitle/photo.png');
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(chrome.downloads.download).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'blob:mock-url', filename: 'PageTitle/photo.png' }),
+      expect.any(Function)
+    );
+  });
+
+  test('revokes the object URL after a successful download', async () => {
+    mockSuccessfulFetch();
+    mockSuccessfulDownload();
+    await fetchAndDownload('https://example.com/photo.png', 'PageTitle/photo.png');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  test('uses conflictAction: overwrite', async () => {
+    mockSuccessfulFetch();
+    mockSuccessfulDownload();
+    await fetchAndDownload('https://example.com/photo.png', 'PageTitle/photo.png');
+    expect(chrome.downloads.download).toHaveBeenCalledWith(
+      expect.objectContaining({ conflictAction: 'overwrite' }),
+      expect.any(Function)
+    );
+  });
+
+  test('throws on non-OK HTTP response', async () => {
+    global.fetch.mockResolvedValueOnce({ ok: false, status: 401 });
+    await expect(fetchAndDownload('https://example.com/secret.png', 'p/secret.png'))
+      .rejects.toThrow('HTTP 401');
+  });
+
+  test('throws and revokes object URL when download is interrupted', async () => {
+    mockSuccessfulFetch();
+    chrome.downloads.download.mockImplementation((opts, cb) => cb(42));
+    chrome.downloads.search.mockImplementation((query, cb) =>
+      cb([{ state: 'interrupted', error: 'NETWORK_FAILED' }])
+    );
+    await expect(fetchAndDownload('https://example.com/photo.png', 'p/photo.png'))
+      .rejects.toThrow('interrupted');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  test('throws when chrome.downloads.download returns no ID', async () => {
+    mockSuccessfulFetch();
+    chrome.downloads.download.mockImplementation((opts, cb) => cb(undefined));
+    await expect(fetchAndDownload('https://example.com/photo.png', 'p/photo.png'))
+      .rejects.toThrow('Download failed');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });
 });

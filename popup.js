@@ -1,7 +1,8 @@
 // popup.js
 // In the browser, sanitiseTitle / getOrCreateDir / fetchAndWrite are globals from lib/*.js.
 
-let dirHandle = null;   // FileSystemDirectoryHandle for the vault root
+let dirHandle = null;       // FileSystemDirectoryHandle — set if user picked a custom location
+let savedHandle = null;     // handle loaded from IndexedDB (may need permission re-grant)
 let assets = [];
 let pageTitle = '';
 let scanned = false;
@@ -29,12 +30,13 @@ function openDB() {
 
 async function saveHandle(handle) {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).put(handle, 'vaultDir');
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
+  chrome.storage.local.set({ vaultFolderName: handle.name });
 }
 
 async function loadHandle() {
@@ -47,17 +49,24 @@ async function loadHandle() {
   });
 }
 
-// --- Vault folder UI ---
+// --- Asset Location setting UI ---
 
 function updateVaultDisplay() {
   if (dirHandle) {
     vaultDisplay.textContent = dirHandle.name;
     vaultDisplay.classList.remove('not-set');
     selectVaultBtn.textContent = 'Change';
-  } else {
-    vaultDisplay.textContent = 'No vault folder selected';
+  } else if (savedHandle) {
+    // Handle saved but permission lapsed (e.g. after browser restart)
+    chrome.storage.local.get(['vaultFolderName'], (r) => {
+      vaultDisplay.textContent = `${r.vaultFolderName || 'Custom folder'} (click Reconnect)`;
+    });
     vaultDisplay.classList.add('not-set');
-    selectVaultBtn.textContent = 'Select vault folder';
+    selectVaultBtn.textContent = 'Reconnect';
+  } else {
+    vaultDisplay.textContent = 'Downloads (default)';
+    vaultDisplay.classList.remove('not-set');
+    selectVaultBtn.textContent = 'Browse…';
   }
   updateClipBtn();
 }
@@ -68,18 +77,34 @@ function updateClipBtn() {
     clipBtn.disabled = true;
     clipBtn.textContent = 'No Assets Found';
   } else {
-    clipBtn.disabled = !dirHandle;
+    clipBtn.disabled = false;
     clipBtn.textContent = `Download ${assets.length} Asset${assets.length !== 1 ? 's' : ''}`;
   }
 }
 
 selectVaultBtn.addEventListener('click', async () => {
+  // If a handle is saved but permission lapsed, re-request instead of opening picker
+  if (savedHandle && !dirHandle) {
+    try {
+      const perm = await savedHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        dirHandle = savedHandle;
+        updateVaultDisplay();
+        setStatus('Location reconnected.', 'success');
+        return;
+      }
+    } catch {
+      // Fall through to picker
+    }
+  }
+
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
     dirHandle = handle;
+    savedHandle = handle;
     await saveHandle(handle);
     updateVaultDisplay();
-    setStatus('Vault folder set.', 'success');
+    setStatus('Asset location set.', 'success');
   } catch (err) {
     if (err.name !== 'AbortError') {
       setStatus('Could not select folder.', 'error');
@@ -92,21 +117,21 @@ function setStatus(msg, type = '') {
   statusEl.className = 'status ' + type;
 }
 
-// --- Load saved handle and scan on open ---
+// --- Load saved setting and scan on open ---
 
 async function init() {
   try {
-    const saved = await loadHandle();
-    if (saved) {
-      const perm = await saved.queryPermission({ mode: 'readwrite' });
+    const handle = await loadHandle();
+    if (handle) {
+      savedHandle = handle;
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
       if (perm === 'granted') {
-        dirHandle = saved;
-      } else {
-        dirHandle = null;
+        dirHandle = handle;
       }
     }
   } catch {
     dirHandle = null;
+    savedHandle = null;
   }
   updateVaultDisplay();
   scanAssets();
@@ -187,60 +212,71 @@ function scanAssets() {
 // --- Download assets ---
 
 clipBtn.addEventListener('click', async () => {
-  if (!dirHandle || !scanned || assets.length === 0) return;
+  if (!scanned || assets.length === 0) return;
 
   clipBtn.disabled = true;
   clipBtn.textContent = 'Downloading…';
   setStatus('Downloading assets…', 'loading');
 
-  try {
-    const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') {
-      setStatus('Permission denied for vault folder.', 'error');
-      clipBtn.disabled = false;
-      clipBtn.textContent = `Download ${assets.length} Asset${assets.length !== 1 ? 's' : ''}`;
-      return;
-    }
-  } catch {
-    setStatus('Could not get permission for vault folder.', 'error');
-    return;
-  }
-
-  let targetDir;
-  try {
-    targetDir = await getOrCreateDir(dirHandle, ['raw', 'assets', pageTitle]);
-  } catch (err) {
-    setStatus('Could not create assets folder in vault.', 'error');
-    console.error('Asset Clipper: folder creation failed', err);
-    return;
-  }
-
   let successCount = 0;
   let errorCount = 0;
 
-  for (let i = 0; i < assets.length; i++) {
-    const asset = assets[i];
-    const itemStatusEl = document.getElementById(`item-status-${i}`);
-
-    if (itemStatusEl) {
-      itemStatusEl.textContent = '↓';
-      itemStatusEl.className = 'item-status downloading';
+  if (dirHandle) {
+    // Custom location: use File System Access API
+    try {
+      const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        setStatus('Permission denied for asset location.', 'error');
+        updateClipBtn();
+        return;
+      }
+    } catch {
+      setStatus('Could not get permission for asset location.', 'error');
+      updateClipBtn();
+      return;
     }
 
+    let targetDir;
     try {
-      await fetchAndWrite(asset.url, asset.filename, targetDir);
-      successCount++;
-      if (itemStatusEl) {
-        itemStatusEl.textContent = '✓';
-        itemStatusEl.className = 'item-status done';
-      }
+      targetDir = await getOrCreateDir(dirHandle, ['raw', 'assets', pageTitle]);
     } catch (err) {
-      errorCount++;
-      if (itemStatusEl) {
-        itemStatusEl.textContent = '✗';
-        itemStatusEl.className = 'item-status error';
+      setStatus('Could not create assets folder.', 'error');
+      console.error('Asset Clipper: folder creation failed', err);
+      updateClipBtn();
+      return;
+    }
+
+    for (let i = 0; i < assets.length; i++) {
+      const asset = assets[i];
+      const itemEl = document.getElementById(`item-status-${i}`);
+      if (itemEl) { itemEl.textContent = '↓'; itemEl.className = 'item-status downloading'; }
+
+      try {
+        await fetchAndWrite(asset.url, asset.filename, targetDir);
+        successCount++;
+        if (itemEl) { itemEl.textContent = '✓'; itemEl.className = 'item-status done'; }
+      } catch (err) {
+        errorCount++;
+        if (itemEl) { itemEl.textContent = '✗'; itemEl.className = 'item-status error'; }
+        console.error(`Asset Clipper: failed ${asset.url}`, err);
       }
-      console.error(`Asset Clipper: failed to download ${asset.url}`, err);
+    }
+  } else {
+    // Default: use chrome.downloads (saves to system Downloads folder)
+    for (let i = 0; i < assets.length; i++) {
+      const asset = assets[i];
+      const itemEl = document.getElementById(`item-status-${i}`);
+      if (itemEl) { itemEl.textContent = '↓'; itemEl.className = 'item-status downloading'; }
+
+      try {
+        await fetchAndDownload(asset.url, `${pageTitle}/${asset.filename}`);
+        successCount++;
+        if (itemEl) { itemEl.textContent = '✓'; itemEl.className = 'item-status done'; }
+      } catch (err) {
+        errorCount++;
+        if (itemEl) { itemEl.textContent = '✗'; itemEl.className = 'item-status error'; }
+        console.error(`Asset Clipper: failed ${asset.url}`, err);
+      }
     }
   }
 

@@ -16,6 +16,13 @@ global.chrome = {
       set: jest.fn(),
     },
   },
+  downloads: {
+    download: jest.fn(),
+    search: jest.fn(),
+  },
 };
+
+global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+global.URL.revokeObjectURL = jest.fn();
 
 global.fetch = jest.fn();

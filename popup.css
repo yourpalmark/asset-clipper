@@ -23,19 +23,34 @@ body {
   color: #cba6f7;
 }
 
-.vault-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+.setting {
   background: #181825;
   border: 1px solid #313244;
   border-radius: 6px;
-  padding: 7px 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.setting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.setting-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.setting-description {
+  font-size: 11px;
+  color: #6c7086;
+  margin-bottom: 5px;
 }
 
 #vault-path-display {
-  flex: 1;
   font-size: 11px;
   color: #a6adc8;
   overflow: hidden;
@@ -49,7 +64,7 @@ body {
 
 #select-vault-btn {
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: 3px 10px;
   background: #313244;
   color: #cdd6f4;
   border: none;
