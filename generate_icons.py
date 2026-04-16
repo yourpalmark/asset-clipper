@@ -29,15 +29,10 @@ def create_icon(size):
     img = Image.new('RGBA', (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # --- Background: purple rounded square ---
-    BG = (109, 40, 217, 255)       # #6d28d9
-    pad = int(S * 0.04)
-    bg_r = int(S * 0.18)
-    draw_rounded_rect(draw, [pad, pad, S - pad, S - pad], bg_r, fill=BG)
-
-    WHITE = (255, 255, 255, 255)
-    PEAK  = (255, 255, 255, 180)
-    lw    = max(2, int(S * 0.055))  # line/border width
+    PURPLE = (124, 58, 237, 255)    # #7c3aed
+    PEAK   = (124, 58, 237, 180)   # translucent purple for peaks
+    WHITE  = PURPLE                 # reuse purple everywhere white was used
+    lw     = max(2, int(S * 0.055))
 
     # --- Photo frame (upper ~45% of canvas) ---
     fm  = int(S * 0.18)             # horizontal margin
@@ -45,7 +40,7 @@ def create_icon(size):
     fb  = int(S * 0.52)             # frame bottom
     fr  = int(S * 0.06)             # frame corner radius
     draw.rounded_rectangle([fm, ft, S - fm, fb], radius=fr,
-                           outline=WHITE, width=lw)
+                           outline=PURPLE, width=lw)
 
     # Landscape peaks inside the frame
     il = fm + lw + int(S * 0.02)
@@ -74,7 +69,7 @@ def create_icon(size):
     sx = ir - sr - int(S * 0.04)
     sy = it + sr + int(S * 0.02)
     draw.ellipse([sx - sr, sy - sr, sx + sr, sy + sr],
-                 fill=(255, 230, 100, 220))
+                 fill=(124, 58, 237, 220))
 
     # --- Download arrow (lower ~45% of canvas) ---
     ax   = S // 2
