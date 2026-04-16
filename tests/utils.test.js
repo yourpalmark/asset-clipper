@@ -120,6 +120,11 @@ describe('sanitiseTitle', () => {
   test('replaces all illegal chars: / \\ : * ? " < > |', () => {
     expect(sanitiseTitle('/\\:*?"<>|')).toBe('---------');
   });
+
+  test('strips trailing " -" left by separator replacement', () => {
+    expect(sanitiseTitle('My Page | ')).toBe('My Page');
+    expect(sanitiseTitle('My Page - ')).toBe('My Page');
+  });
 });
 
 // ---------------------------------------------------------------------------
