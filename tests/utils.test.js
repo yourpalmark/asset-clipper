@@ -1,4 +1,4 @@
-const { SUPPORTED_EXTENSIONS, decodeFilenameFromUrl, sanitiseTitle } = require('../lib/utils');
+const { SUPPORTED_EXTENSIONS, decodeFilenameFromUrl, sanitiseFilename, sanitiseTitle } = require('../lib/utils');
 
 // ---------------------------------------------------------------------------
 // decodeFilenameFromUrl
@@ -21,8 +21,8 @@ describe('decodeFilenameFromUrl', () => {
       'Screenshot%202026-03-19%20at%2012.15.14%E2%80%AFPM.png' +
       '?version=1&modificationDate=1773902761577&api=v2';
     const result = decodeFilenameFromUrl(url);
-    // %20 → space, %E2%80%AF → narrow no-break space (U+202F)
-    expect(result).toBe('Screenshot 2026-03-19 at 12.15.14\u202FPM.png');
+    // %20 → space, %E2%80%AF (narrow no-break space) → normalized to regular space
+    expect(result).toBe('Screenshot 2026-03-19 at 12.15.14 PM.png');
   });
 
   test('strips query string from filename', () => {
@@ -49,6 +49,41 @@ describe('decodeFilenameFromUrl', () => {
 
   test('returns null for empty string', () => {
     expect(decodeFilenameFromUrl('')).toBeNull();
+  });
+
+  test('sanitises illegal filename chars (e.g. Wikipedia File: prefix)', () => {
+    expect(decodeFilenameFromUrl('https://en.wikipedia.org/wiki/File:Question_book-new.svg'))
+      .toBe('File-Question_book-new.svg');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitiseFilename
+// ---------------------------------------------------------------------------
+
+describe('sanitiseFilename', () => {
+  test('replaces colon with hyphen', () => {
+    expect(sanitiseFilename('File:image.png')).toBe('File-image.png');
+  });
+
+  test('replaces all illegal chars: / \\ : * ? " < > |', () => {
+    expect(sanitiseFilename('a/b\\c:d*e?f"g<h>i|j.png')).toBe('a-b-c-d-e-f-g-h-i-j.png');
+  });
+
+  test('collapses multiple spaces', () => {
+    expect(sanitiseFilename('my  file.png')).toBe('my file.png');
+  });
+
+  test('trims leading and trailing whitespace', () => {
+    expect(sanitiseFilename('  file.png  ')).toBe('file.png');
+  });
+
+  test('leaves normal filenames unchanged', () => {
+    expect(sanitiseFilename('diagram-v2.png')).toBe('diagram-v2.png');
+  });
+
+  test('preserves file extension', () => {
+    expect(sanitiseFilename('report:final.pdf')).toBe('report-final.pdf');
   });
 });
 

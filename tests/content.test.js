@@ -258,7 +258,7 @@ describe('Confluence page scenario', () => {
     expect(results).toHaveLength(3); // 2 images + 1 PDF
 
     const filenames = results.map((r) => r.filename);
-    expect(filenames).toContain('Screenshot 2026-03-19 at 12.15.14\u202FPM.png');
+    expect(filenames).toContain('Screenshot 2026-03-19 at 12.15.14 PM.png');
     expect(filenames).toContain('Architecture Diagram.png');
     expect(filenames).toContain('spec.pdf');
   });
