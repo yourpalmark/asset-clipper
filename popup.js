@@ -264,7 +264,7 @@ clipBtn.addEventListener('click', async () => {
 
     let targetDir;
     try {
-      targetDir = await getOrCreateDir(dirHandle, ['raw', 'assets', pageTitle]);
+      targetDir = await getOrCreateDir(dirHandle, [pageTitle]);
     } catch (err) {
       setStatus('Could not create assets folder.', 'error');
       console.error('Asset Clipper: folder creation failed', err);
