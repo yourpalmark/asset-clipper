@@ -264,12 +264,13 @@ clipBtn.addEventListener('click', async () => {
 
     let targetDir;
     try {
+      console.log('Asset Clipper: creating subfolder', JSON.stringify(pageTitle));
       targetDir = await getOrCreateDir(dirHandle, [pageTitle]);
     } catch (err) {
-      setStatus('Could not create assets folder.', 'error');
-      console.error('Asset Clipper: folder creation failed', err);
-      updateClipBtn();
-      return;
+      // Subfolder creation can fail if the page title contains characters
+      // the browser rejects even after sanitisation. Fall back to the root folder.
+      console.warn('Asset Clipper: could not create subfolder, saving to root folder', err);
+      targetDir = dirHandle;
     }
 
     for (let i = 0; i < assets.length; i++) {
