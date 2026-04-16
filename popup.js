@@ -184,29 +184,55 @@ function scanAssets() {
   clipBtn.disabled = true;
   clipBtn.textContent = 'Scanning…';
 
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tabId = tabs[0].id;
-    chrome.tabs.sendMessage(tabId, { action: 'getAssets' }, (response) => {
-      if (chrome.runtime.lastError || !response) {
-        setStatus('Could not scan page. Try reloading the tab.', 'error');
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    const tab = tabs[0];
+
+    // First attempt — content script may already be running
+    chrome.tabs.sendMessage(tab.id, { action: 'getAssets' }, async (response) => {
+      if (!chrome.runtime.lastError && response) {
+        applyResponse(response);
+        return;
+      }
+
+      // Content script not present (tab was open before the extension loaded).
+      // Inject it now and retry once.
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['lib/utils.js', 'content.js'],
+        });
+      } catch {
+        setStatus('Cannot scan this page (restricted URL).', 'error');
         clipBtn.disabled = true;
         clipBtn.textContent = 'Scan Failed';
         return;
       }
 
-      assets = response.assets;
-      pageTitle = sanitiseTitle(response.pageTitle || 'Untitled');
-      scanned = true;
-
-      if (assets.length === 0) {
-        setStatus('No assets found in main content.');
-      } else {
-        setStatus(`Found ${assets.length} asset${assets.length !== 1 ? 's' : ''}.`);
-      }
-
-      renderAssetList();
+      chrome.tabs.sendMessage(tab.id, { action: 'getAssets' }, (response2) => {
+        if (chrome.runtime.lastError || !response2) {
+          setStatus('Could not scan page. Try reloading the tab.', 'error');
+          clipBtn.disabled = true;
+          clipBtn.textContent = 'Scan Failed';
+          return;
+        }
+        applyResponse(response2);
+      });
     });
   });
+}
+
+function applyResponse(response) {
+  assets = response.assets;
+  pageTitle = sanitiseTitle(response.pageTitle || 'Untitled');
+  scanned = true;
+
+  if (assets.length === 0) {
+    setStatus('No assets found in main content.');
+  } else {
+    setStatus(`Found ${assets.length} asset${assets.length !== 1 ? 's' : ''}.`);
+  }
+
+  renderAssetList();
 }
 
 // --- Download assets ---
