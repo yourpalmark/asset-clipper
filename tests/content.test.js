@@ -48,18 +48,18 @@ describe('container selection', () => {
     expect(results[0].filename).toBe('fallback.png');
   });
 
-  test('prefers #main-content over .wiki-content', () => {
+  test('prefers .wiki-content over #main-content (Confluence: #main-content wraps the full page)', () => {
     const doc = makeDoc(`
-      <div class="wiki-content">
-        <img src="https://example.com/wiki.png" />
-      </div>
       <div id="main-content">
-        <img src="https://example.com/main.png" />
+        <img src="https://example.com/outer.png" />
+        <div class="wiki-content">
+          <img src="https://example.com/article.png" />
+        </div>
       </div>
     `);
     const results = extractMainContentAssets(doc);
     expect(results).toHaveLength(1);
-    expect(results[0].filename).toBe('main.png');
+    expect(results[0].filename).toBe('article.png');
   });
 
   test('uses <main> element', () => {

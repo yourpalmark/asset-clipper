@@ -24,23 +24,26 @@ function extractMainContentAssets(doc) {
   if (!doc) doc = document;
 
   const contentSelectors = [
-    '#main-content',
-    // MediaWiki / Wikipedia (more specific than generic #content)
-    '#mw-content-text',
-    '.mw-parser-output',
-    // Confluence
+    // Confluence — most specific first; #main-content on Confluence wraps the
+    // entire page including title and metadata, so match .wiki-content first.
     '.wiki-content',
     '#wiki-content',
     '.confluence-content',
-    '.page-body',
-    // Generic
+    // MediaWiki / Wikipedia
+    '#mw-content-text',
+    '.mw-parser-output',
+    // Generic semantic / ARIA
     'main',
     'article',
     '[role="main"]',
-    '#content',
+    // Common CMS / blog class names
     '.entry-content',
     '.post-content',
     '.article-body',
+    '.page-body',
+    // Broad fallbacks — matched last because they often wrap more than just content
+    '#main-content',
+    '#content',
   ];
 
   let container = null;
