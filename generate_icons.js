@@ -7,8 +7,7 @@ const path = require('path');
 // Material "download" icon path, viewBox 0 -960 960 960.
 // Embedded in a 960x960 canvas via translate(0,960).
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960">
-  <circle cx="480" cy="480" r="470" fill="#a78bfa"/>
-  <g transform="translate(0,960)" fill="white">
+  <g transform="translate(0,960)" fill="#a78bfa">
     <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200Z
              M240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120
              q0 33-23.5 56.5T720-160H240Z"/>
