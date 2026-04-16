@@ -3,6 +3,11 @@
 // Depends on SUPPORTED_EXTENSIONS and decodeFilenameFromUrl being available as globals,
 // provided by lib/utils.js (loaded first via manifest content_scripts, or via tests/setup.js).
 
+// Minimum rendered width (px) for an <img> to be considered main content.
+// Images with an explicit width attribute smaller than this are treated as
+// inline icons, flags, or decorative elements and skipped.
+const MIN_IMG_WIDTH = 50;
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action !== 'getAssets') return;
 
@@ -13,21 +18,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 /**
  * Scans the main content container of the given document for supported assets.
- * Accepts an optional `doc` parameter so tests can inject a mock document.
+ * Accepts a `doc` parameter so tests can inject a mock document.
  */
 function extractMainContentAssets(doc) {
   if (!doc) doc = document;
 
   const contentSelectors = [
     '#main-content',
-    '#content',
+    // MediaWiki / Wikipedia (more specific than generic #content)
+    '#mw-content-text',
+    '.mw-parser-output',
+    // Confluence
+    '.wiki-content',
+    '#wiki-content',
+    '.confluence-content',
+    '.page-body',
+    // Generic
     'main',
     'article',
     '[role="main"]',
-    '.wiki-content',        // Confluence
-    '#wiki-content',        // Confluence alternate
-    '.confluence-content',  // Confluence alternate
-    '.page-body',
+    '#content',
     '.entry-content',
     '.post-content',
     '.article-body',
@@ -53,8 +63,10 @@ function extractMainContentAssets(doc) {
     results.push({ url, filename });
   }
 
-  // <img src>
+  // <img src> — skip images with an explicitly small width (icons, flags, decorative elements)
   for (const el of container.querySelectorAll('img[src]')) {
+    const explicitWidth = parseInt(el.getAttribute('width') || '0', 10);
+    if (explicitWidth > 0 && explicitWidth < MIN_IMG_WIDTH) continue;
     add(el.src);
   }
 
@@ -78,14 +90,9 @@ function extractMainContentAssets(doc) {
     add(el.data);
   }
 
-  // <a href> — only links whose href points to a supported file type
-  for (const el of container.querySelectorAll('a[href]')) {
-    add(el.href);
-  }
-
   return results;
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { extractMainContentAssets };
+  module.exports = { extractMainContentAssets, MIN_IMG_WIDTH };
 }

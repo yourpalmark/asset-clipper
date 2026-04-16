@@ -1,4 +1,4 @@
-const { extractMainContentAssets } = require('../content');
+const { extractMainContentAssets, MIN_IMG_WIDTH } = require('../content');
 
 // Helper: build a minimal document from an HTML string using jsdom (provided by the test env).
 function makeDoc(html) {
@@ -195,38 +195,64 @@ describe('<object> elements', () => {
 });
 
 // ---------------------------------------------------------------------------
-// <a href> links
+// <a href> links — not extracted (links are navigation, not embedded assets)
 // ---------------------------------------------------------------------------
 
 describe('<a href> links', () => {
-  test('extracts links to supported file types', () => {
+  test('does not extract links to PDFs', () => {
     const doc = makeDoc(`<a href="https://example.com/manual.pdf">Download</a>`);
-    const [result] = extractMainContentAssets(doc);
-    expect(result.filename).toBe('manual.pdf');
+    expect(extractMainContentAssets(doc)).toHaveLength(0);
   });
 
-  test('extracts links to Office documents', () => {
+  test('does not extract links to Office documents', () => {
     const doc = makeDoc(`
       <a href="https://example.com/report.docx">Report</a>
       <a href="https://example.com/data.xlsx">Data</a>
     `);
+    expect(extractMainContentAssets(doc)).toHaveLength(0);
+  });
+
+  test('does not extract links that look like files but go to wiki pages', () => {
+    // e.g. Wikipedia File: pages — the href leads to an HTML page, not the file
+    const doc = makeDoc(`<a href="https://en.wikipedia.org/wiki/File:Question_book-new.svg">img</a>`);
+    expect(extractMainContentAssets(doc)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Small image filtering
+// ---------------------------------------------------------------------------
+
+describe('small image filtering', () => {
+  test('skips images with explicit width below threshold', () => {
+    const doc = makeDoc(`<img src="https://example.com/icon.png" width="${MIN_IMG_WIDTH - 1}" />`);
+    expect(extractMainContentAssets(doc)).toHaveLength(0);
+  });
+
+  test('includes images with explicit width at the threshold', () => {
+    const doc = makeDoc(`<img src="https://example.com/photo.png" width="${MIN_IMG_WIDTH}" />`);
+    expect(extractMainContentAssets(doc)).toHaveLength(1);
+  });
+
+  test('includes images with no explicit width attribute', () => {
+    // Lazy-loaded or CSS-sized images have no width attribute — do not skip them
+    const doc = makeDoc(`<img src="https://example.com/photo.png" />`);
+    expect(extractMainContentAssets(doc)).toHaveLength(1);
+  });
+
+  test('includes images with width="0" (attribute present but unset)', () => {
+    const doc = makeDoc(`<img src="https://example.com/photo.png" width="0" />`);
+    expect(extractMainContentAssets(doc)).toHaveLength(1);
+  });
+
+  test('skips small flag/icon images mixed with larger content images', () => {
+    const doc = makeDoc(`
+      <img src="https://example.com/flag.png" width="20" height="12" />
+      <img src="https://example.com/album-cover.jpg" />
+    `);
     const results = extractMainContentAssets(doc);
-    expect(results).toHaveLength(2);
-  });
-
-  test('ignores links to HTML pages', () => {
-    const doc = makeDoc(`<a href="https://example.com/other-page.html">Link</a>`);
-    expect(extractMainContentAssets(doc)).toHaveLength(0);
-  });
-
-  test('ignores links with no file extension', () => {
-    const doc = makeDoc(`<a href="https://example.com/some-page">Link</a>`);
-    expect(extractMainContentAssets(doc)).toHaveLength(0);
-  });
-
-  test('ignores javascript: hrefs', () => {
-    const doc = makeDoc(`<a href="javascript:void(0)">Click</a>`);
-    expect(extractMainContentAssets(doc)).toHaveLength(0);
+    expect(results).toHaveLength(1);
+    expect(results[0].filename).toBe('album-cover.jpg');
   });
 });
 
@@ -235,7 +261,7 @@ describe('<a href> links', () => {
 // ---------------------------------------------------------------------------
 
 describe('Confluence page scenario', () => {
-  test('extracts attachment images from a Confluence-style page', () => {
+  test('extracts embedded images from a Confluence-style page, ignores links', () => {
     const url1 =
       'https://confluence.example.com/download/attachments/123/' +
       'Screenshot%202026-03-19%20at%2012.15.14%E2%80%AFPM.png' +
@@ -255,11 +281,42 @@ describe('Confluence page scenario', () => {
     `);
 
     const results = extractMainContentAssets(doc);
-    expect(results).toHaveLength(3); // 2 images + 1 PDF
+    expect(results).toHaveLength(2); // 2 embedded images only — links are not extracted
 
     const filenames = results.map((r) => r.filename);
     expect(filenames).toContain('Screenshot 2026-03-19 at 12.15.14 PM.png');
     expect(filenames).toContain('Architecture Diagram.png');
-    expect(filenames).toContain('spec.pdf');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MediaWiki / Wikipedia selector
+// ---------------------------------------------------------------------------
+
+describe('MediaWiki selector', () => {
+  test('uses #mw-content-text when present', () => {
+    const doc = makeDoc(`
+      <div id="mw-head"><img src="https://example.com/nav-icon.png" /></div>
+      <div id="mw-content-text">
+        <img src="https://example.com/article-image.jpg" />
+      </div>
+    `);
+    const results = extractMainContentAssets(doc);
+    expect(results).toHaveLength(1);
+    expect(results[0].filename).toBe('article-image.jpg');
+  });
+
+  test('uses .mw-parser-output when present', () => {
+    const doc = makeDoc(`
+      <div id="mw-content-text">
+        <div class="mw-parser-output">
+          <img src="https://example.com/article-image.jpg" />
+        </div>
+      </div>
+    `);
+    // #mw-content-text is matched first — image is still inside it
+    const results = extractMainContentAssets(doc);
+    expect(results).toHaveLength(1);
+    expect(results[0].filename).toBe('article-image.jpg');
   });
 });
