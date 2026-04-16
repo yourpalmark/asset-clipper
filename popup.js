@@ -1,7 +1,7 @@
 // popup.js
 
-let vaultPath = '';
-let images = [];
+let dirHandle = null;   // FileSystemDirectoryHandle for the vault root
+let assets = [];
 let pageTitle = '';
 let scanned = false;
 
@@ -9,50 +9,111 @@ const statusEl = document.getElementById('status');
 const imageListEl = document.getElementById('image-list');
 const noImagesEl = document.getElementById('no-images');
 const clipBtn = document.getElementById('clip-btn');
-const vaultPathDisplay = document.getElementById('vault-path-display');
-const settingsPanel = document.getElementById('settings-panel');
-const vaultPathInput = document.getElementById('vault-path-input');
+const vaultDisplay = document.getElementById('vault-path-display');
+const selectVaultBtn = document.getElementById('select-vault-btn');
 
-// --- Settings ---
+// --- Persist directory handle via IndexedDB ---
 
-document.getElementById('toggle-settings').addEventListener('click', () => {
-  const open = settingsPanel.style.display === 'block';
-  settingsPanel.style.display = open ? 'none' : 'block';
-  if (!open) vaultPathInput.value = vaultPath;
-});
+const DB_NAME = 'asset-clipper';
+const STORE_NAME = 'handles';
 
-document.getElementById('save-settings').addEventListener('click', () => {
-  const val = vaultPathInput.value.trim().replace(/\/+$/, '');
-  chrome.storage.local.set({ vaultPath: val }, () => {
-    vaultPath = val;
-    updateVaultDisplay();
-    settingsPanel.style.display = 'none';
-    setStatus('Vault path saved.', 'success');
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => e.target.result.createObjectStore(STORE_NAME);
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
   });
-});
+}
+
+async function saveHandle(handle) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(handle, 'vaultDir');
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadHandle() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get('vaultDir');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// --- Vault folder UI ---
 
 function updateVaultDisplay() {
-  if (vaultPath) {
-    vaultPathDisplay.textContent = vaultPath;
-    vaultPathDisplay.classList.remove('not-set');
+  if (dirHandle) {
+    vaultDisplay.textContent = dirHandle.name;
+    vaultDisplay.classList.remove('not-set');
+    selectVaultBtn.textContent = 'Change';
   } else {
-    vaultPathDisplay.textContent = 'No vault path set — click ⚙ to configure';
-    vaultPathDisplay.classList.add('not-set');
+    vaultDisplay.textContent = 'No vault folder selected';
+    vaultDisplay.classList.add('not-set');
+    selectVaultBtn.textContent = 'Select vault folder';
+  }
+  updateClipBtn();
+}
+
+function updateClipBtn() {
+  if (!scanned) return;
+  if (assets.length === 0) {
+    clipBtn.disabled = true;
+    clipBtn.textContent = 'No Assets Found';
+  } else {
+    clipBtn.disabled = !dirHandle;
+    clipBtn.textContent = `Download ${assets.length} Asset${assets.length !== 1 ? 's' : ''}`;
   }
 }
+
+selectVaultBtn.addEventListener('click', async () => {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    dirHandle = handle;
+    await saveHandle(handle);
+    updateVaultDisplay();
+    setStatus('Vault folder set.', 'success');
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      setStatus('Could not select folder.', 'error');
+    }
+  }
+});
 
 function setStatus(msg, type = '') {
   statusEl.textContent = msg;
   statusEl.className = 'status ' + type;
 }
 
-// --- Load saved settings and scan on open ---
+// --- Load saved handle and scan on open ---
 
-chrome.storage.local.get(['vaultPath'], (result) => {
-  vaultPath = result.vaultPath || '';
+async function init() {
+  try {
+    const saved = await loadHandle();
+    if (saved) {
+      // Verify we still have permission (may need to re-request on new session)
+      const perm = await saved.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        dirHandle = saved;
+      } else {
+        // Permission lapsed — we'll re-request when the user clicks Select
+        dirHandle = null;
+      }
+    }
+  } catch {
+    dirHandle = null;
+  }
   updateVaultDisplay();
-  scanImages();
-});
+  scanAssets();
+}
+
+init();
 
 // --- Sanitise page title for use as a folder name ---
 
@@ -64,30 +125,30 @@ function sanitiseTitle(title) {
     .substring(0, 80);
 }
 
-// --- Render image list ---
+// --- Render asset list ---
 
-function renderImageList() {
+function renderAssetList() {
   imageListEl.innerHTML = '';
 
-  if (images.length === 0) {
+  if (assets.length === 0) {
     imageListEl.style.display = 'none';
     noImagesEl.style.display = 'block';
     clipBtn.disabled = true;
-    clipBtn.textContent = 'No Images Found';
+    clipBtn.textContent = 'No Assets Found';
     return;
   }
 
   imageListEl.style.display = 'block';
   noImagesEl.style.display = 'none';
 
-  images.forEach((img, i) => {
+  assets.forEach((asset, i) => {
     const item = document.createElement('li');
     item.className = 'image-item';
 
     const name = document.createElement('span');
     name.className = 'filename';
-    name.title = img.filename;
-    name.textContent = img.filename;
+    name.title = asset.filename;
+    name.textContent = asset.filename;
 
     const stat = document.createElement('span');
     stat.className = 'item-status pending';
@@ -99,20 +160,19 @@ function renderImageList() {
     imageListEl.appendChild(item);
   });
 
-  clipBtn.disabled = !vaultPath;
-  clipBtn.textContent = `Download ${images.length} Image${images.length !== 1 ? 's' : ''}`;
+  updateClipBtn();
 }
 
-// --- Scan for images (runs automatically on popup open) ---
+// --- Scan for assets (runs automatically on popup open) ---
 
-function scanImages() {
-  setStatus('Scanning page...', 'loading');
+function scanAssets() {
+  setStatus('Scanning page…', 'loading');
   clipBtn.disabled = true;
   clipBtn.textContent = 'Scanning…';
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabId = tabs[0].id;
-    chrome.tabs.sendMessage(tabId, { action: 'getImages' }, (response) => {
+    chrome.tabs.sendMessage(tabId, { action: 'getAssets' }, (response) => {
       if (chrome.runtime.lastError || !response) {
         setStatus('Could not scan page. Try reloading the tab.', 'error');
         clipBtn.disabled = true;
@@ -120,17 +180,17 @@ function scanImages() {
         return;
       }
 
-      images = response.images;
+      assets = response.assets;
       pageTitle = sanitiseTitle(response.pageTitle || 'Untitled');
       scanned = true;
 
-      if (images.length === 0) {
-        setStatus('No images found in main content.');
+      if (assets.length === 0) {
+        setStatus('No assets found in main content.');
       } else {
-        setStatus(`Found ${images.length} image${images.length !== 1 ? 's' : ''}.`);
+        setStatus(`Found ${assets.length} asset${assets.length !== 1 ? 's' : ''}.`);
       }
 
-      renderImageList();
+      renderAssetList();
     });
   });
 }
@@ -138,22 +198,41 @@ function scanImages() {
 // --- Download images ---
 
 clipBtn.addEventListener('click', async () => {
-  if (!vaultPath || !scanned || images.length === 0) return;
+  if (!dirHandle || !scanned || assets.length === 0) return;
 
   clipBtn.disabled = true;
   clipBtn.textContent = 'Downloading…';
-  setStatus('Downloading images…', 'loading');
+  setStatus('Downloading assets…', 'loading');
 
-  // chrome.downloads uses paths relative to the system Downloads folder.
-  // If vaultPath is set, it is a relative path from Downloads to the vault root.
-  const folderPath = vaultPath
-    ? `${vaultPath}/raw/assets/${pageTitle}`
-    : `raw/assets/${pageTitle}`;
+  // Ensure we have write permission (may need to re-request after browser restart)
+  try {
+    const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      setStatus('Permission denied for vault folder.', 'error');
+      clipBtn.disabled = false;
+      clipBtn.textContent = `Download ${images.length} Image${images.length !== 1 ? 's' : ''}`;
+      return;
+    }
+  } catch {
+    setStatus('Could not get permission for vault folder.', 'error');
+    return;
+  }
+
+  // Get or create: raw/assets/<Page Title>/
+  let targetDir;
+  try {
+    targetDir = await getOrCreateDir(dirHandle, ['raw', 'assets', pageTitle]);
+  } catch (err) {
+    setStatus('Could not create assets folder in vault.', 'error');
+    console.error('Asset Clipper: folder creation failed', err);
+    return;
+  }
+
   let successCount = 0;
   let errorCount = 0;
 
-  for (let i = 0; i < images.length; i++) {
-    const img = images[i];
+  for (let i = 0; i < assets.length; i++) {
+    const asset = assets[i];
     const itemStatusEl = document.getElementById(`item-status-${i}`);
 
     if (itemStatusEl) {
@@ -162,7 +241,7 @@ clipBtn.addEventListener('click', async () => {
     }
 
     try {
-      await downloadImage(img.url, `${folderPath}/${img.filename}`);
+      await fetchAndWrite(asset.url, asset.filename, targetDir);
       successCount++;
       if (itemStatusEl) {
         itemStatusEl.textContent = '✓';
@@ -174,54 +253,35 @@ clipBtn.addEventListener('click', async () => {
         itemStatusEl.textContent = '✗';
         itemStatusEl.className = 'item-status error';
       }
-      console.error(`Asset Clipper: failed to download ${img.url}`, err);
+      console.error(`Asset Clipper: failed to download ${asset.url}`, err);
     }
   }
 
   if (errorCount === 0) {
-    setStatus(`Downloaded ${successCount} image${successCount !== 1 ? 's' : ''} successfully.`, 'success');
+    setStatus(`Downloaded ${successCount} asset${successCount !== 1 ? 's' : ''} successfully.`, 'success');
   } else {
-    setStatus(`${successCount} succeeded, ${errorCount} failed.`, errorCount === images.length ? 'error' : '');
+    setStatus(`${successCount} succeeded, ${errorCount} failed.`, errorCount === assets.length ? 'error' : '');
   }
 
   clipBtn.textContent = 'Done';
 });
 
-// --- Download a single image via chrome.downloads API ---
+// --- File System helpers ---
 
-function downloadImage(url, filePath) {
-  return new Promise((resolve, reject) => {
-    // Normalise path separators for the OS — chrome.downloads expects forward slashes on Mac/Linux
-    const normPath = filePath.replace(/\\/g, '/');
+async function getOrCreateDir(rootHandle, pathParts) {
+  let current = rootHandle;
+  for (const part of pathParts) {
+    current = await current.getDirectoryHandle(part, { create: true });
+  }
+  return current;
+}
 
-    chrome.downloads.download(
-      {
-        url,
-        filename: normPath,
-        conflictAction: 'overwrite',
-        saveAs: false,
-      },
-      (downloadId) => {
-        if (chrome.runtime.lastError || downloadId === undefined) {
-          reject(new Error(chrome.runtime.lastError?.message || 'Download failed'));
-          return;
-        }
-
-        // Poll for completion
-        const interval = setInterval(() => {
-          chrome.downloads.search({ id: downloadId }, (results) => {
-            if (!results || results.length === 0) return;
-            const dl = results[0];
-            if (dl.state === 'complete') {
-              clearInterval(interval);
-              resolve();
-            } else if (dl.state === 'interrupted') {
-              clearInterval(interval);
-              reject(new Error(`Download interrupted: ${dl.error}`));
-            }
-          });
-        }, 300);
-      }
-    );
-  });
+async function fetchAndWrite(url, filename, dirHandle) {
+  const response = await fetch(url, { credentials: 'include' });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const blob = await response.blob();
+  const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
 }

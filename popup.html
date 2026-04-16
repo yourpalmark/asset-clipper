@@ -9,20 +9,16 @@
 <body>
   <div class="header">
     <span class="title">Asset Clipper</span>
-    <button id="toggle-settings" title="Settings">⚙</button>
   </div>
 
-  <div id="settings-panel" style="display:none;">
-    <label for="vault-path-input">Vault path (relative to Downloads folder)</label>
-    <input type="text" id="vault-path-input" placeholder="Leave empty if Downloads = vault root" />
-    <button id="save-settings">Save</button>
+  <div class="vault-row">
+    <span id="vault-path-display" class="not-set">No vault folder selected</span>
+    <button id="select-vault-btn">Select vault folder</button>
   </div>
-
-  <div id="vault-path-display" class="not-set">No vault path set — click ⚙ to configure</div>
 
   <div id="status" class="status"></div>
 
-  <div id="no-images" style="display:none;" class="muted">No images found in main content.</div>
+  <div id="no-images" style="display:none;" class="muted">No assets found in main content.</div>
 
   <ul id="image-list"></ul>
 
