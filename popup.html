@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asset Clipper</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="header">
+    <span class="title">Asset Clipper</span>
+    <button id="toggle-settings" title="Settings">⚙</button>
+  </div>
+
+  <div id="settings-panel" style="display:none;">
+    <label for="vault-path-input">Vault path (relative to Downloads folder)</label>
+    <input type="text" id="vault-path-input" placeholder="Leave empty if Downloads = vault root" />
+    <button id="save-settings">Save</button>
+  </div>
+
+  <div id="vault-path-display" class="not-set">No vault path set — click ⚙ to configure</div>
+
+  <div id="status" class="status"></div>
+
+  <div id="no-images" style="display:none;" class="muted">No images found in main content.</div>
+
+  <ul id="image-list"></ul>
+
+  <button id="clip-btn" disabled>Scan for Images</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
