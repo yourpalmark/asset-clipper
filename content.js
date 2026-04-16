@@ -1,11 +1,7 @@
 // content.js
 // Injected into the active tab. Finds main-content assets and returns their URLs + filenames.
-// In the browser, SUPPORTED_EXTENSIONS and decodeFilenameFromUrl are globals from lib/utils.js.
-// In Node (tests), we import them explicitly.
-
-if (typeof module !== 'undefined') {
-  var { SUPPORTED_EXTENSIONS, decodeFilenameFromUrl } = require('./lib/utils');
-}
+// Depends on SUPPORTED_EXTENSIONS and decodeFilenameFromUrl being available as globals,
+// provided by lib/utils.js (loaded first via manifest content_scripts, or via tests/setup.js).
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action !== 'getAssets') return;
