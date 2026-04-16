@@ -1,4 +1,5 @@
 // popup.js
+// In the browser, sanitiseTitle / getOrCreateDir / fetchAndWrite are globals from lib/*.js.
 
 let dirHandle = null;   // FileSystemDirectoryHandle for the vault root
 let assets = [];
@@ -97,12 +98,10 @@ async function init() {
   try {
     const saved = await loadHandle();
     if (saved) {
-      // Verify we still have permission (may need to re-request on new session)
       const perm = await saved.queryPermission({ mode: 'readwrite' });
       if (perm === 'granted') {
         dirHandle = saved;
       } else {
-        // Permission lapsed — we'll re-request when the user clicks Select
         dirHandle = null;
       }
     }
@@ -114,16 +113,6 @@ async function init() {
 }
 
 init();
-
-// --- Sanitise page title for use as a folder name ---
-
-function sanitiseTitle(title) {
-  return title
-    .replace(/[/\\:*?"<>|]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 80);
-}
 
 // --- Render asset list ---
 
@@ -195,7 +184,7 @@ function scanAssets() {
   });
 }
 
-// --- Download images ---
+// --- Download assets ---
 
 clipBtn.addEventListener('click', async () => {
   if (!dirHandle || !scanned || assets.length === 0) return;
@@ -204,13 +193,12 @@ clipBtn.addEventListener('click', async () => {
   clipBtn.textContent = 'Downloading…';
   setStatus('Downloading assets…', 'loading');
 
-  // Ensure we have write permission (may need to re-request after browser restart)
   try {
     const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') {
       setStatus('Permission denied for vault folder.', 'error');
       clipBtn.disabled = false;
-      clipBtn.textContent = `Download ${images.length} Image${images.length !== 1 ? 's' : ''}`;
+      clipBtn.textContent = `Download ${assets.length} Asset${assets.length !== 1 ? 's' : ''}`;
       return;
     }
   } catch {
@@ -218,7 +206,6 @@ clipBtn.addEventListener('click', async () => {
     return;
   }
 
-  // Get or create: raw/assets/<Page Title>/
   let targetDir;
   try {
     targetDir = await getOrCreateDir(dirHandle, ['raw', 'assets', pageTitle]);
@@ -265,23 +252,3 @@ clipBtn.addEventListener('click', async () => {
 
   clipBtn.textContent = 'Done';
 });
-
-// --- File System helpers ---
-
-async function getOrCreateDir(rootHandle, pathParts) {
-  let current = rootHandle;
-  for (const part of pathParts) {
-    current = await current.getDirectoryHandle(part, { create: true });
-  }
-  return current;
-}
-
-async function fetchAndWrite(url, filename, dirHandle) {
-  const response = await fetch(url, { credentials: 'include' });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const blob = await response.blob();
-  const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(blob);
-  await writable.close();
-}

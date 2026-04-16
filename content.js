@@ -1,28 +1,27 @@
 // content.js
 // Injected into the active tab. Finds main-content assets and returns their URLs + filenames.
+// In the browser, SUPPORTED_EXTENSIONS and decodeFilenameFromUrl are globals from lib/utils.js.
+// In Node (tests), we import them explicitly.
 
-const SUPPORTED_EXTENSIONS = new Set([
-  // Images
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp', 'tiff', 'tif', 'avif', 'heic',
-  // Documents
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'csv', 'txt', 'rtf',
-  // Video
-  'mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v',
-  // Audio
-  'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac',
-  // Archives
-  'zip', 'tar', 'gz', '7z',
-]);
+if (typeof module !== 'undefined') {
+  var { SUPPORTED_EXTENSIONS, decodeFilenameFromUrl } = require('./lib/utils');
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action !== 'getAssets') return;
 
   const pageTitle = document.title || 'Untitled';
-  const assets = extractMainContentAssets();
+  const assets = extractMainContentAssets(document);
   sendResponse({ pageTitle, assets });
 });
 
-function extractMainContentAssets() {
+/**
+ * Scans the main content container of the given document for supported assets.
+ * Accepts an optional `doc` parameter so tests can inject a mock document.
+ */
+function extractMainContentAssets(doc) {
+  if (!doc) doc = document;
+
   const contentSelectors = [
     '#main-content',
     '#content',
@@ -40,10 +39,10 @@ function extractMainContentAssets() {
 
   let container = null;
   for (const selector of contentSelectors) {
-    const el = document.querySelector(selector);
+    const el = doc.querySelector(selector);
     if (el) { container = el; break; }
   }
-  if (!container) container = document.body;
+  if (!container) container = doc.body;
 
   const seen = new Set();
   const results = [];
@@ -91,20 +90,6 @@ function extractMainContentAssets() {
   return results;
 }
 
-function decodeFilenameFromUrl(url) {
-  try {
-    const parsed = new URL(url);
-    const pathParts = parsed.pathname.split('/');
-    let raw = pathParts[pathParts.length - 1];
-    if (!raw) return null;
-
-    raw = decodeURIComponent(raw);
-    raw = raw.replace(/[?#].*$/, '');
-
-    if (!raw || raw.length < 2) return null;
-
-    return raw;
-  } catch {
-    return null;
-  }
+if (typeof module !== 'undefined') {
+  module.exports = { extractMainContentAssets };
 }
