@@ -124,7 +124,7 @@ async function init() {
     const handle = await loadHandle();
     if (handle) {
       savedHandle = handle;
-      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      const perm = await handle.requestPermission({ mode: 'readwrite' });
       if (perm === 'granted') {
         dirHandle = handle;
       }
