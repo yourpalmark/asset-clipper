@@ -30,10 +30,6 @@ function extractWithDefuddle(doc) {
     };
   }
 
-  console.log('Asset Clipper: document.title =', doc.title);
-  console.log('Asset Clipper: defuddle.title =', defuddleResult.title);
-  console.log('Asset Clipper: defuddle.site =', defuddleResult.site);
-
   const tempDiv = doc.createElement('div');
   tempDiv.innerHTML = defuddleResult.content || '';
 
