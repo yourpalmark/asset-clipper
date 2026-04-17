@@ -1,35 +1,39 @@
 // scripts/build-defuddle.js
-// Bundles defuddle into a browser-compatible IIFE for use as a content script.
-// Output: lib/defuddle.bundle.js  (exposes globalThis.Defuddle)
+// Bundles defuddle + content.js into a single IIFE for use as a content script.
+// Output: content.bundle.js
+//
+// lib/utils.js is loaded separately via the manifest before content.bundle.js,
+// so SUPPORTED_EXTENSIONS and decodeFilenameFromUrl are available as globals.
 
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 
-const outfile = path.join(__dirname, '..', 'lib', 'defuddle.bundle.js');
+const root = path.join(__dirname, '..');
 
-// Write a tiny entry wrapper that imports Defuddle and assigns it to globalThis
-// so it survives strict-mode scoping in Chrome content scripts.
-const entryWrapper = path.join(__dirname, '..', 'lib', '_defuddle_entry.js');
-fs.writeFileSync(entryWrapper, `
-import { Defuddle } from ${JSON.stringify(
-  path.join(__dirname, '..', 'node_modules', 'defuddle', 'dist', 'defuddle.js')
-)};
-globalThis.Defuddle = Defuddle;
-`);
+// Temporary ESM entry that imports Defuddle then loads content.js.
+// esbuild resolves and bundles everything into a single IIFE.
+const entry = path.join(root, '_content_entry.mjs');
+fs.writeFileSync(entry, [
+  `import { Defuddle } from 'defuddle';`,
+  `globalThis.Defuddle = Defuddle;`,
+  // content.js references Defuddle via globalThis and uses CJS exports for tests.
+  // esbuild handles the mixed-module case fine during bundling.
+  `import ${JSON.stringify(path.join(root, 'content.js'))};`,
+].join('\n'));
 
 esbuild.build({
-  entryPoints: [entryWrapper],
+  entryPoints: [entry],
   bundle: true,
   format: 'iife',
-  outfile,
+  outfile: path.join(root, 'content.bundle.js'),
   platform: 'browser',
   minify: true,
 }).then(() => {
-  fs.unlinkSync(entryWrapper);
-  console.log('Built lib/defuddle.bundle.js');
+  fs.unlinkSync(entry);
+  console.log('Built content.bundle.js');
 }).catch((err) => {
-  fs.unlinkSync(entryWrapper);
+  try { fs.unlinkSync(entry); } catch {}
   console.error(err);
   process.exit(1);
 });

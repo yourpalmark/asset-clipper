@@ -1,8 +1,7 @@
 // content.js
-// Injected into the active tab. Uses defuddle to extract main-content assets,
-// matching the same content area that Obsidian Web Clipper clips from.
-// Depends on SUPPORTED_EXTENSIONS, decodeFilenameFromUrl (lib/utils.js) and
-// Defuddle (lib/defuddle.bundle.js) being loaded first as content scripts.
+// Injected into the active tab via content.bundle.js (built by `npm run build`).
+// Defuddle is bundled in by the build step; SUPPORTED_EXTENSIONS and
+// decodeFilenameFromUrl are globals from lib/utils.js loaded first.
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action !== 'getAssets') return;
@@ -96,6 +95,7 @@ function extractAssetsFromContainer(container) {
   return results;
 }
 
+// CommonJS export for Jest tests (tests mock Defuddle via setup.js)
 if (typeof module !== 'undefined') {
   module.exports = { extractWithDefuddle, extractAssetsFromContainer };
 }
