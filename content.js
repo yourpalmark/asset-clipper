@@ -1,57 +1,54 @@
 // content.js
-// Injected into the active tab. Finds main-content assets and returns their URLs + filenames.
-// Depends on SUPPORTED_EXTENSIONS and decodeFilenameFromUrl being available as globals,
-// provided by lib/utils.js (loaded first via manifest content_scripts, or via tests/setup.js).
-
-// Minimum rendered width (px) for an <img> to be considered main content.
-// Images with an explicit width attribute smaller than this are treated as
-// inline icons, flags, or decorative elements and skipped.
-const MIN_IMG_WIDTH = 50;
+// Injected into the active tab. Uses defuddle to extract main-content assets,
+// matching the same content area that Obsidian Web Clipper clips from.
+// Depends on SUPPORTED_EXTENSIONS, decodeFilenameFromUrl (lib/utils.js) and
+// Defuddle (lib/defuddle.bundle.js) being loaded first as content scripts.
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action !== 'getAssets') return;
 
-  const pageTitle = document.title || 'Untitled';
-  const assets = extractMainContentAssets(document);
-  sendResponse({ pageTitle, assets });
+  const result = extractWithDefuddle(document);
+  sendResponse({ pageTitle: result.pageTitle, assets: result.assets });
 });
 
 /**
- * Scans the main content container of the given document for supported assets.
+ * Runs defuddle on a clone of the given document to extract the main content,
+ * then scans that content for supported assets.
  * Accepts a `doc` parameter so tests can inject a mock document.
  */
-function extractMainContentAssets(doc) {
+function extractWithDefuddle(doc) {
   if (!doc) doc = document;
 
-  const contentSelectors = [
-    // Confluence — most specific first; #main-content on Confluence wraps the
-    // entire page including title and metadata, so match .wiki-content first.
-    '.wiki-content',
-    '#wiki-content',
-    '.confluence-content',
-    // MediaWiki / Wikipedia
-    '#mw-content-text',
-    '.mw-parser-output',
-    // Generic semantic / ARIA
-    'main',
-    'article',
-    '[role="main"]',
-    // Common CMS / blog class names
-    '.entry-content',
-    '.post-content',
-    '.article-body',
-    '.page-body',
-    // Broad fallbacks — matched last because they often wrap more than just content
-    '#main-content',
-    '#content',
-  ];
+  // Clone so defuddle's DOM cleanup doesn't mutate the live page.
+  const clonedDoc = doc.cloneNode(true);
 
-  let container = null;
-  for (const selector of contentSelectors) {
-    const el = doc.querySelector(selector);
-    if (el) { container = el; break; }
+  let defuddleResult;
+  try {
+    defuddleResult = new Defuddle(clonedDoc, { url: doc.URL || '' }).parse();
+  } catch (err) {
+    console.warn('Asset Clipper: defuddle failed, falling back to body scan', err);
+    return {
+      pageTitle: doc.title || 'Untitled',
+      assets: extractAssetsFromContainer(doc.body),
+    };
   }
-  if (!container) container = doc.body;
+
+  // Parse the extracted content HTML into a temporary container so we can
+  // query it with the DOM API.
+  const tempDiv = doc.createElement('div');
+  tempDiv.innerHTML = defuddleResult.content || '';
+
+  const pageTitle = defuddleResult.title || doc.title || 'Untitled';
+  const assets = extractAssetsFromContainer(tempDiv);
+
+  return { pageTitle, assets };
+}
+
+/**
+ * Scans a DOM container for all supported asset URLs.
+ */
+function extractAssetsFromContainer(container) {
+  if (!container) return [];
 
   const seen = new Set();
   const results = [];
@@ -66,36 +63,36 @@ function extractMainContentAssets(doc) {
     results.push({ url, filename });
   }
 
-  // <img src> — skip images with an explicitly small width (icons, flags, decorative elements)
+  // <img src> — skip images with an explicitly small width (icons, flags)
   for (const el of container.querySelectorAll('img[src]')) {
     const explicitWidth = parseInt(el.getAttribute('width') || '0', 10);
-    if (explicitWidth > 0 && explicitWidth < MIN_IMG_WIDTH) continue;
-    add(el.src);
+    if (explicitWidth > 0 && explicitWidth < 50) continue;
+    add(el.src || el.getAttribute('src'));
   }
 
   // <video src> and <video><source src>
   for (const el of container.querySelectorAll('video[src], video source[src]')) {
-    add(el.src);
+    add(el.src || el.getAttribute('src'));
   }
 
   // <audio src> and <audio><source src>
   for (const el of container.querySelectorAll('audio[src], audio source[src]')) {
-    add(el.src);
+    add(el.src || el.getAttribute('src'));
   }
 
   // <embed src>
   for (const el of container.querySelectorAll('embed[src]')) {
-    add(el.src);
+    add(el.src || el.getAttribute('src'));
   }
 
   // <object data>
   for (const el of container.querySelectorAll('object[data]')) {
-    add(el.data);
+    add(el.data || el.getAttribute('data'));
   }
 
   return results;
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { extractMainContentAssets, MIN_IMG_WIDTH };
+  module.exports = { extractWithDefuddle, extractAssetsFromContainer };
 }

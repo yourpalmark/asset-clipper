@@ -69,7 +69,8 @@ Click **Browse…** in the popup to set your **Asset Location** — the folder w
 ## Development
 
 ```bash
-npm install   # install test dependencies
+npm install   # install dependencies
+npm run build # bundle defuddle for the extension (required before loading unpacked)
 npm test      # run unit tests
 ```
 
