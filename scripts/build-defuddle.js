@@ -15,7 +15,7 @@ const root = path.join(__dirname, '..');
 // esbuild resolves and bundles everything into a single IIFE.
 const entry = path.join(root, '_content_entry.mjs');
 fs.writeFileSync(entry, [
-  `import { Defuddle } from 'defuddle';`,
+  `import { Defuddle } from ${JSON.stringify(path.join(root, 'node_modules', 'defuddle', 'dist', 'defuddle.js'))};`,
   `globalThis.Defuddle = Defuddle;`,
   // content.js references Defuddle via globalThis and uses CJS exports for tests.
   // esbuild handles the mixed-module case fine during bundling.
