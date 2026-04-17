@@ -52,18 +52,15 @@ async function loadHandle() {
 // --- Asset Location setting UI ---
 
 function updateVaultDisplay() {
-  if (dirHandle) {
-    vaultDisplay.textContent = dirHandle.name;
+  if (dirHandle || savedHandle) {
+    const name = dirHandle ? dirHandle.name : savedHandle.name;
+    vaultDisplay.textContent = name;
     vaultDisplay.classList.remove('not-set');
-    selectVaultBtn.textContent = 'Change';
-  } else if (savedHandle) {
-    // Permission not yet active — show the name; Download click will re-grant it.
-    vaultDisplay.textContent = savedHandle.name;
-    vaultDisplay.classList.remove('not-set');
+    vaultDisplay.classList.add('is-set');
     selectVaultBtn.textContent = 'Change';
   } else {
     vaultDisplay.textContent = 'Downloads (default)';
-    vaultDisplay.classList.remove('not-set');
+    vaultDisplay.classList.remove('not-set', 'is-set');
     selectVaultBtn.textContent = 'Browse…';
   }
   updateClipBtn();

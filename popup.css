@@ -58,6 +58,14 @@ body {
   white-space: nowrap;
 }
 
+#vault-path-display.is-set {
+  display: inline-block;
+  color: #a6e3a1;
+  background: #1e3a2e;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
 #vault-path-display.not-set {
   color: #fab387;
 }
