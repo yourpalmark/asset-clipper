@@ -312,4 +312,6 @@ clipBtn.addEventListener('click', async () => {
   }
 
   clipBtn.textContent = 'Done';
+  clipBtn.disabled = false;
+  clipBtn.onclick = () => window.close();
 });
