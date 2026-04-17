@@ -1,8 +1,8 @@
 // popup.js
 // In the browser, sanitiseTitle / getOrCreateDir / fetchAndWrite are globals from lib/*.js.
 
-let dirHandle = null;       // FileSystemDirectoryHandle — set if user picked a custom location
-let savedHandle = null;     // handle loaded from IndexedDB (may need permission re-grant)
+let dirHandle = null;       // FileSystemDirectoryHandle with active permission
+let savedHandle = null;     // handle loaded from IndexedDB (permission may need re-grant)
 let assets = [];
 let pageTitle = '';
 let scanned = false;
@@ -56,6 +56,11 @@ function updateVaultDisplay() {
     vaultDisplay.textContent = dirHandle.name;
     vaultDisplay.classList.remove('not-set');
     selectVaultBtn.textContent = 'Change';
+  } else if (savedHandle) {
+    // Permission not yet active — show the name; Download click will re-grant it.
+    vaultDisplay.textContent = savedHandle.name;
+    vaultDisplay.classList.remove('not-set');
+    selectVaultBtn.textContent = 'Change';
   } else {
     vaultDisplay.textContent = 'Downloads (default)';
     vaultDisplay.classList.remove('not-set');
@@ -102,9 +107,14 @@ async function init() {
     const handle = await loadHandle();
     if (handle) {
       savedHandle = handle;
-      // Set dirHandle directly — permission is checked (with a user gesture)
-      // when the user clicks Download, so we don't need to verify it here.
-      dirHandle = handle;
+      // queryPermission doesn't require a user gesture — use it to check if
+      // Chrome already has an active grant for this popup context.
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        dirHandle = handle;
+      }
+      // If 'prompt', dirHandle stays null. The Download button will call
+      // requestPermission() with a proper user gesture and re-grant it there.
     }
   } catch {
     dirHandle = null;
@@ -220,6 +230,20 @@ clipBtn.addEventListener('click', async () => {
   clipBtn.disabled = true;
   clipBtn.textContent = 'Downloading…';
   setStatus('Downloading assets…', 'loading');
+
+  // If we have a saved handle but permission wasn't active on popup open,
+  // request it now — this click IS a user gesture so requestPermission works.
+  if (savedHandle && !dirHandle) {
+    try {
+      const perm = await savedHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        dirHandle = savedHandle;
+        updateVaultDisplay();
+      }
+    } catch {
+      // requestPermission failed — fall through to chrome.downloads fallback
+    }
+  }
 
   let successCount = 0;
   let errorCount = 0;
