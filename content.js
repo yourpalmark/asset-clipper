@@ -32,6 +32,10 @@ function extractWithDefuddle(doc) {
     };
   }
 
+  console.log('Asset Clipper: document.title =', doc.title);
+  console.log('Asset Clipper: defuddle.title =', defuddleResult.title);
+  console.log('Asset Clipper: defuddle.site =', defuddleResult.site);
+
   // Parse the extracted content HTML into a temporary container so we can
   // query it with the DOM API.
   const tempDiv = doc.createElement('div');
