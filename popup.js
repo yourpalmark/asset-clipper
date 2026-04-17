@@ -199,7 +199,7 @@ function scanAssets() {
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: ['lib/utils.js', 'content.js'],
+          files: ['lib/utils.js', 'content.bundle.js'],
         });
       } catch {
         setStatus('Cannot scan this page (restricted URL).', 'error');
