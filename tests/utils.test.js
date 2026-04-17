@@ -91,9 +91,31 @@ describe('sanitiseFilename', () => {
 // sanitiseTitle
 // ---------------------------------------------------------------------------
 
+// sanitiseTitle mirrors Web Clipper's sanitizeFileName (Mac behaviour in tests
+// since navigator is undefined in Node → non-Windows path is taken).
 describe('sanitiseTitle', () => {
-  test('replaces illegal path characters with hyphens', () => {
-    expect(sanitiseTitle('Title: With / Illegal * Chars?')).toBe('Title- With - Illegal - Chars-');
+  test('removes colon (illegal on macOS)', () => {
+    expect(sanitiseTitle('Title: Subtitle')).toBe('Title Subtitle');
+  });
+
+  test('removes forward slash (illegal on macOS)', () => {
+    expect(sanitiseTitle('path/to/thing')).toBe('pathtothing');
+  });
+
+  test('preserves ? (legal on macOS, kept by Web Clipper)', () => {
+    expect(sanitiseTitle('What is this?')).toBe('What is this?');
+  });
+
+  test('preserves * (legal on macOS, kept by Web Clipper)', () => {
+    expect(sanitiseTitle('a*b')).toBe('a*b');
+  });
+
+  test('removes Obsidian-specific chars: # | ^ [ ]', () => {
+    expect(sanitiseTitle('Title #1 | [tag] ^up')).toBe('Title 1 tag up');
+  });
+
+  test('removes | and collapses surrounding spaces (e.g. "Page | Site")', () => {
+    expect(sanitiseTitle('My Page | Confluence')).toBe('My Page  Confluence'.replace(/\s+/g, ' ').trim());
   });
 
   test('collapses multiple spaces into one', () => {
@@ -113,17 +135,12 @@ describe('sanitiseTitle', () => {
     expect(sanitiseTitle('My Project Overview')).toBe('My Project Overview');
   });
 
-  test('replaces backslash', () => {
-    expect(sanitiseTitle('path\\to\\thing')).toBe('path-to-thing');
+  test('removes leading periods', () => {
+    expect(sanitiseTitle('...hidden')).toBe('hidden');
   });
 
-  test('replaces all illegal chars: / \\ : * ? " < > |', () => {
-    expect(sanitiseTitle('/\\:*?"<>|')).toBe('---------');
-  });
-
-  test('strips trailing " -" left by separator replacement', () => {
-    expect(sanitiseTitle('My Page | ')).toBe('My Page');
-    expect(sanitiseTitle('My Page - ')).toBe('My Page');
+  test('returns Untitled for a title that becomes empty', () => {
+    expect(sanitiseTitle('///')).toBe('Untitled');
   });
 });
 
