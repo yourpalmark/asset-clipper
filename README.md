@@ -28,9 +28,10 @@ Asset Clipper runs inside Chrome (where your session is active), downloads asset
 Asset Clipper is not yet published to the Chrome Web Store. To install it manually:
 
 1. Clone or download this repository
-2. Open Chrome and go to `chrome://extensions`
-3. Enable **Developer mode** (top right)
-4. Click **Load unpacked** and select the `asset-clipper` folder
+2. Run `npm install && npm run build` inside the `asset-clipper` folder
+3. Open Chrome and go to `chrome://extensions`
+4. Enable **Developer mode** (top right)
+5. Click **Load unpacked** and select the `asset-clipper` folder
 
 ---
 
@@ -58,6 +59,7 @@ Click **Browse…** in the popup to set your **Asset Location** — the folder w
 
 ## Notes
 
+- Content detection uses [defuddle](https://github.com/kepano/defuddle) — the same library as Obsidian Web Clipper — so Asset Clipper scans exactly the same content area that Web Clipper clips from
 - Only assets embedded in the **main content area** of the page are downloaded — nav icons, logos, and decorative elements are excluded
 - Small images (explicit width below 50 px) are skipped as likely icons or flags
 - Filenames are URL-decoded (spaces and encoded characters are restored)
