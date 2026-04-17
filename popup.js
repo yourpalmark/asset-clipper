@@ -56,13 +56,6 @@ function updateVaultDisplay() {
     vaultDisplay.textContent = dirHandle.name;
     vaultDisplay.classList.remove('not-set');
     selectVaultBtn.textContent = 'Change';
-  } else if (savedHandle) {
-    // Handle saved but permission lapsed (e.g. after browser restart)
-    chrome.storage.local.get(['vaultFolderName'], (r) => {
-      vaultDisplay.textContent = `${r.vaultFolderName || 'Custom folder'} (click Reconnect)`;
-    });
-    vaultDisplay.classList.add('not-set');
-    selectVaultBtn.textContent = 'Reconnect';
   } else {
     vaultDisplay.textContent = 'Downloads (default)';
     vaultDisplay.classList.remove('not-set');
@@ -83,21 +76,6 @@ function updateClipBtn() {
 }
 
 selectVaultBtn.addEventListener('click', async () => {
-  // If a handle is saved but permission lapsed, re-request instead of opening picker
-  if (savedHandle && !dirHandle) {
-    try {
-      const perm = await savedHandle.requestPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        dirHandle = savedHandle;
-        updateVaultDisplay();
-        setStatus('Location reconnected.', 'success');
-        return;
-      }
-    } catch {
-      // Fall through to picker
-    }
-  }
-
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
     dirHandle = handle;
@@ -124,17 +102,9 @@ async function init() {
     const handle = await loadHandle();
     if (handle) {
       savedHandle = handle;
-      // requestPermission silently re-grants if Chrome remembers the permission.
-      // It requires a user gesture and may throw — keep savedHandle so the
-      // Reconnect button remains available if it does.
-      try {
-        const perm = await handle.requestPermission({ mode: 'readwrite' });
-        if (perm === 'granted') {
-          dirHandle = handle;
-        }
-      } catch {
-        // No user gesture available — Reconnect button will be shown instead.
-      }
+      // Set dirHandle directly — permission is checked (with a user gesture)
+      // when the user clicks Download, so we don't need to verify it here.
+      dirHandle = handle;
     }
   } catch {
     dirHandle = null;
