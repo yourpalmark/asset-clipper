@@ -12,19 +12,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
- * Runs defuddle on a clone of the given document to extract the main content,
+ * Runs defuddle on the given document to extract the main content,
  * then scans that content for supported assets.
  * Accepts a `doc` parameter so tests can inject a mock document.
+ * Passes the live document directly (matching Web Clipper's approach) so
+ * defuddle has access to all meta tags including dynamically-set ones.
  */
 function extractWithDefuddle(doc) {
   if (!doc) doc = document;
 
-  // Clone so defuddle's DOM cleanup doesn't mutate the live page.
-  const clonedDoc = doc.cloneNode(true);
-
   let defuddleResult;
   try {
-    defuddleResult = new Defuddle(clonedDoc, { url: doc.URL || '' }).parse();
+    defuddleResult = new Defuddle(doc, { url: doc.URL || '' }).parse();
   } catch (err) {
     console.warn('Asset Clipper: defuddle failed, falling back to body scan', err);
     return {
