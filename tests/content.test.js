@@ -208,16 +208,17 @@ describe('extractWithDefuddle', () => {
   });
 
   test('falls back to body scan when Defuddle throws', () => {
-    // Temporarily break the global mock
-    const orig = global.Defuddle;
-    global.Defuddle = class { parse() { throw new Error('defuddle failed'); } };
+    // Override the mock to throw for this test only
+    const defuddle = require('defuddle');
+    const origParse = defuddle.prototype.parse;
+    defuddle.prototype.parse = function () { throw new Error('defuddle failed'); };
 
     const doc = makeDoc(`<img src="https://example.com/photo.png" />`);
     const { assets } = extractWithDefuddle(doc);
     expect(assets).toHaveLength(1);
     expect(assets[0].filename).toBe('photo.png');
 
-    global.Defuddle = orig;
+    defuddle.prototype.parse = origParse;
   });
 });
 

@@ -1,7 +1,8 @@
 // content.js
 // Injected into the active tab via content.bundle.js (built by `npm run build`).
-// Defuddle is bundled in by the build step; SUPPORTED_EXTENSIONS and
-// decodeFilenameFromUrl are globals from lib/utils.js loaded first.
+// SUPPORTED_EXTENSIONS and decodeFilenameFromUrl are globals from lib/utils.js.
+
+const Defuddle = require('defuddle');
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action !== 'getAssets') return;
@@ -14,8 +15,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  * Runs defuddle on the given document to extract the main content,
  * then scans that content for supported assets.
  * Accepts a `doc` parameter so tests can inject a mock document.
- * Passes the live document directly (matching Web Clipper's approach) so
- * defuddle has access to all meta tags including dynamically-set ones.
  */
 function extractWithDefuddle(doc) {
   if (!doc) doc = document;
@@ -35,8 +34,6 @@ function extractWithDefuddle(doc) {
   console.log('Asset Clipper: defuddle.title =', defuddleResult.title);
   console.log('Asset Clipper: defuddle.site =', defuddleResult.site);
 
-  // Parse the extracted content HTML into a temporary container so we can
-  // query it with the DOM API.
   const tempDiv = doc.createElement('div');
   tempDiv.innerHTML = defuddleResult.content || '';
 
@@ -65,29 +62,24 @@ function extractAssetsFromContainer(container) {
     results.push({ url, filename });
   }
 
-  // <img src> — skip images with an explicitly small width (icons, flags)
   for (const el of container.querySelectorAll('img[src]')) {
     const explicitWidth = parseInt(el.getAttribute('width') || '0', 10);
     if (explicitWidth > 0 && explicitWidth < 50) continue;
     add(el.src || el.getAttribute('src'));
   }
 
-  // <video src> and <video><source src>
   for (const el of container.querySelectorAll('video[src], video source[src]')) {
     add(el.src || el.getAttribute('src'));
   }
 
-  // <audio src> and <audio><source src>
   for (const el of container.querySelectorAll('audio[src], audio source[src]')) {
     add(el.src || el.getAttribute('src'));
   }
 
-  // <embed src>
   for (const el of container.querySelectorAll('embed[src]')) {
     add(el.src || el.getAttribute('src'));
   }
 
-  // <object data>
   for (const el of container.querySelectorAll('object[data]')) {
     add(el.data || el.getAttribute('data'));
   }
@@ -95,7 +87,6 @@ function extractAssetsFromContainer(container) {
   return results;
 }
 
-// CommonJS export for Jest tests (tests mock Defuddle via setup.js)
 if (typeof module !== 'undefined') {
   module.exports = { extractWithDefuddle, extractAssetsFromContainer };
 }
