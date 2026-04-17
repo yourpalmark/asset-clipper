@@ -4,3 +4,4 @@ lib/defuddle.bundle.js
 lib/_defuddle_entry.js
 content.bundle.js
 _content_entry.mjs
+_defuddle_shim.mjs
