@@ -104,9 +104,9 @@ describe('sanitiseTitle', () => {
     expect(sanitiseTitle('  padded  ')).toBe('padded');
   });
 
-  test('truncates titles longer than 80 characters', () => {
-    const long = 'A'.repeat(100);
-    expect(sanitiseTitle(long)).toHaveLength(80);
+  test('truncates titles longer than 245 characters', () => {
+    const long = 'A'.repeat(300);
+    expect(sanitiseTitle(long)).toHaveLength(245);
   });
 
   test('handles a normal Confluence page title unchanged', () => {
