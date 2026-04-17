@@ -124,9 +124,16 @@ async function init() {
     const handle = await loadHandle();
     if (handle) {
       savedHandle = handle;
-      const perm = await handle.requestPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        dirHandle = handle;
+      // requestPermission silently re-grants if Chrome remembers the permission.
+      // It requires a user gesture and may throw — keep savedHandle so the
+      // Reconnect button remains available if it does.
+      try {
+        const perm = await handle.requestPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          dirHandle = handle;
+        }
+      } catch {
+        // No user gesture available — Reconnect button will be shown instead.
       }
     }
   } catch {
