@@ -80,6 +80,10 @@ function extractAssetsFromContainer(container) {
     add(el.data || el.getAttribute('data'));
   }
 
+  for (const el of container.querySelectorAll('a[href]')) {
+    add(el.href || el.getAttribute('href'));
+  }
+
   return results;
 }
 

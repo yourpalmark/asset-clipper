@@ -119,21 +119,50 @@ describe('<object> elements', () => {
 });
 
 // ---------------------------------------------------------------------------
-// extractAssetsFromContainer — <a href> links are not extracted
+// extractAssetsFromContainer — <a href> links to downloadable files
 // ---------------------------------------------------------------------------
 
 describe('<a href> links', () => {
-  test('does not extract links to PDFs', () => {
+  test('extracts links to PDFs', () => {
     const doc = makeDoc(`<a href="https://example.com/manual.pdf">Download</a>`);
+    const [result] = extractAssetsFromContainer(doc.body);
+    expect(result.filename).toBe('manual.pdf');
+  });
+
+  test('extracts links to Word documents', () => {
+    const doc = makeDoc(`<a href="https://example.com/report.docx">Report</a>`);
+    const [result] = extractAssetsFromContainer(doc.body);
+    expect(result.filename).toBe('report.docx');
+  });
+
+  test('extracts links to Excel spreadsheets', () => {
+    const doc = makeDoc(`<a href="https://example.com/data.xlsx">Data</a>`);
+    const [result] = extractAssetsFromContainer(doc.body);
+    expect(result.filename).toBe('data.xlsx');
+  });
+
+  test('extracts links to PowerPoint files', () => {
+    const doc = makeDoc(`<a href="https://example.com/slides.pptx">Slides</a>`);
+    const [result] = extractAssetsFromContainer(doc.body);
+    expect(result.filename).toBe('slides.pptx');
+  });
+
+  test('skips links to HTML pages', () => {
+    const doc = makeDoc(`<a href="https://example.com/page.html">Page</a>`);
     expect(extractAssetsFromContainer(doc.body)).toHaveLength(0);
   });
 
-  test('does not extract links to Office documents', () => {
-    const doc = makeDoc(`
-      <a href="https://example.com/report.docx">Report</a>
-      <a href="https://example.com/data.xlsx">Data</a>
-    `);
+  test('skips links with no extension', () => {
+    const doc = makeDoc(`<a href="https://example.com/display/PROJ/SomePage">Wiki</a>`);
     expect(extractAssetsFromContainer(doc.body)).toHaveLength(0);
+  });
+
+  test('deduplicates linked files already seen via another element', () => {
+    const doc = makeDoc(`
+      <embed src="https://example.com/report.pdf" />
+      <a href="https://example.com/report.pdf">Download PDF</a>
+    `);
+    expect(extractAssetsFromContainer(doc.body)).toHaveLength(1);
   });
 });
 
@@ -227,7 +256,7 @@ describe('extractWithDefuddle', () => {
 // ---------------------------------------------------------------------------
 
 describe('Confluence page scenario', () => {
-  test('extracts embedded images, ignores linked pages', () => {
+  test('extracts embedded images, linked files, and ignores page links', () => {
     const url1 =
       'https://confluence.example.com/download/attachments/123/' +
       'Screenshot%202026-03-19%20at%2012.15.14%E2%80%AFPM.png' +
@@ -246,10 +275,11 @@ describe('Confluence page scenario', () => {
     `);
 
     const results = extractAssetsFromContainer(doc.body);
-    expect(results).toHaveLength(2);
+    expect(results).toHaveLength(3);
 
     const filenames = results.map((r) => r.filename);
     expect(filenames).toContain('Screenshot 2026-03-19 at 12.15.14 PM.png');
     expect(filenames).toContain('Architecture Diagram.png');
+    expect(filenames).toContain('spec.pdf');
   });
 });
